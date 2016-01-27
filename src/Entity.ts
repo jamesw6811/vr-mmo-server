@@ -4,6 +4,7 @@ export class Entity{
   public y: number;
   public leftRightAngle: number;
   public upDownAngle: number;
+  public tiltAngle: number;
   public id: number;
   public graphic: number;
   constructor(){
@@ -15,6 +16,7 @@ export class Entity{
     this.y = update.getY();
     this.leftRightAngle = update.getLeftRightAngle();
     this.upDownAngle = update.getUpDownAngle();
+    this.tiltAngle = update.getTiltAngle();
   }
 }
 

@@ -64,12 +64,14 @@ export class PlayerUpdate {
   // y: 32-bit float
   // up-down-angle: 32-bit float
   // left-right-angle: 32-bit float
+  // tilt angle: 32-bit float
   static typeBuffer = new Buffer([0x10, 0x00]);
   private databuffer: Buffer;
   private static xIndex = floatLength * 0;
   private static yIndex = floatLength * 1;
   private static upDownAngleIndex = floatLength * 2;
   private static leftRightAngleIndex = floatLength * 3;
+  private static tiltAngleIndex = floatLength * 4;
 
   constructor(buf: Buffer) {
     this.databuffer = buf;
@@ -86,6 +88,9 @@ export class PlayerUpdate {
   getLeftRightAngle(): number {
     return this.databuffer.readFloatBE(PlayerUpdate.leftRightAngleIndex);
   }
+  getTiltAngle(): number {
+    return this.databuffer.readFloatBE(PlayerUpdate.tiltAngleIndex);
+  }
 }
 
 export class EntityUpdate {
@@ -101,7 +106,8 @@ export class EntityUpdate {
   private static yIndex = floatLength * 1;
   private static upDownAngleIndex = floatLength * 2;
   private static leftRightAngleIndex = floatLength * 3;
-  private static entIdIndex = floatLength * 4;
+  private static tiltAngleIndex = floatLength * 4;
+  private static entIdIndex = floatLength * 5;
   private static graphicIndex = EntityUpdate.entIdIndex + entIdLength;
 
   constructor(buf: Buffer) {
@@ -119,6 +125,9 @@ export class EntityUpdate {
   getLeftRightAngle(): number {
     return this.databuffer.readFloatBE(EntityUpdate.leftRightAngleIndex);
   }
+  getTiltAngle(): number {
+    return this.databuffer.readFloatBE(EntityUpdate.tiltAngleIndex);
+  }
   getID(): number {
     return this.databuffer.readUInt16BE(EntityUpdate.entIdIndex);
   }
@@ -131,6 +140,7 @@ export class EntityUpdate {
     buf.writeFloatBE(ent.y, EntityUpdate.yIndex);
     buf.writeFloatBE(ent.upDownAngle, EntityUpdate.upDownAngleIndex);
     buf.writeFloatBE(ent.leftRightAngle, EntityUpdate.leftRightAngleIndex);
+    buf.writeFloatBE(ent.tiltAngle, EntityUpdate.tiltAngleIndex);
     buf.writeUInt16BE(ent.id, EntityUpdate.entIdIndex);
     buf.writeUInt16BE(ent.graphic, EntityUpdate.graphicIndex);
     return GamePacket.createPacket(EntityUpdate.typeBuffer, buf);
