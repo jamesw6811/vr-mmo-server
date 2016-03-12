@@ -56,10 +56,18 @@ class GameServer implements GameServerInterface {
 	}
 
 	sendPlayersUpdate(ent: Entity.Entity) {
-		var sendbuf: Buffer;
-		sendbuf = Packets.EntityUpdate.createPacket(ent);
+		var updatebuf = Packets.EntityUpdate.createPacket(ent);
 		for (var x = 0; x < this.players.length; x++){
 			var player = this.players[x];
+			var sendbuf: Buffer;
+
+			// Self update if sending to player's self
+			if (ent == player){
+				sendbuf = Packets.SelfUpdate.createPacket(ent)
+			} else {
+				sendbuf = updatebuf
+			}
+
 			this.server.send(sendbuf, 0, sendbuf.length, player.port, player.ip,
 				function(){});
 		}

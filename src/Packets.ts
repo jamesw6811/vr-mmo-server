@@ -134,15 +134,29 @@ export class EntityUpdate {
   getGraphic(): number {
     return this.databuffer.readUInt16BE(EntityUpdate.graphicIndex);
   }
+  protected static createDataBuffer(ent: Entity.Entity) : Buffer{
+      var buf = new Buffer(EntityUpdate.graphicIndex+graphicLength);
+      buf.writeFloatBE(ent.x, EntityUpdate.xIndex);
+      buf.writeFloatBE(ent.y, EntityUpdate.yIndex);
+      buf.writeFloatBE(ent.upDownAngle, EntityUpdate.upDownAngleIndex);
+      buf.writeFloatBE(ent.leftRightAngle, EntityUpdate.leftRightAngleIndex);
+      buf.writeFloatBE(ent.tiltAngle, EntityUpdate.tiltAngleIndex);
+      buf.writeUInt16BE(ent.id, EntityUpdate.entIdIndex);
+      buf.writeUInt16BE(ent.graphic, EntityUpdate.graphicIndex);
+      return buf;
+  }
   public static createPacket(ent: Entity.Entity) : Buffer{
-    var buf = new Buffer(EntityUpdate.graphicIndex+graphicLength);
-    buf.writeFloatBE(ent.x, EntityUpdate.xIndex);
-    buf.writeFloatBE(ent.y, EntityUpdate.yIndex);
-    buf.writeFloatBE(ent.upDownAngle, EntityUpdate.upDownAngleIndex);
-    buf.writeFloatBE(ent.leftRightAngle, EntityUpdate.leftRightAngleIndex);
-    buf.writeFloatBE(ent.tiltAngle, EntityUpdate.tiltAngleIndex);
-    buf.writeUInt16BE(ent.id, EntityUpdate.entIdIndex);
-    buf.writeUInt16BE(ent.graphic, EntityUpdate.graphicIndex);
-    return GamePacket.createPacket(EntityUpdate.typeBuffer, buf);
+    return GamePacket.createPacket(EntityUpdate.typeBuffer,
+      EntityUpdate.createDataBuffer(ent));
+  }
+}
+
+export class SelfUpdate extends EntityUpdate{
+  // Same as entity update, but to the player themselves.
+  static typeBuffer = new Buffer([0x10, 0x02]);
+
+  public static createPacket(ent: Entity.Entity) : Buffer{
+    return GamePacket.createPacket(SelfUpdate.typeBuffer,
+      SelfUpdate.createDataBuffer(ent));
   }
 }
