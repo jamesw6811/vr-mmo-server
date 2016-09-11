@@ -11,7 +11,7 @@ namespace VrMMOServer
 
     public class GameNetworkingClient
     {
-        public const string ipstring = "127.0.0.1";
+        public const string ipstring = "192.168.86.175";
         private GamePacketCoordinator coordinator;
         private UdpClient udpClient;
         private int port = 33333;
@@ -30,7 +30,8 @@ namespace VrMMOServer
             IPAddress address;
             IPAddress.TryParse(ipstring, out address);
             e = new IPEndPoint(address, port);
-            udpClient = new UdpClient(ipstring, port);
+            udpClient = new UdpClient();
+            udpClient.Connect(e);
             udpClient.BeginReceive(new AsyncCallback(recv), null);
         }
 
