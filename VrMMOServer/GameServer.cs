@@ -22,9 +22,9 @@ namespace VrMMOServer
             //runClientTests();
             //runClientTests();
             Console.WriteLine("Game server listening...");
-            Console.ReadKey();
+            Console.ReadLine();
             server.shutdown();
-            Console.ReadKey();
+            Console.ReadLine();
         }
 
         static void runClientTests()
