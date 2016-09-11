@@ -37,21 +37,37 @@ namespace VrMMOServer
 
     class GameServer
     {
-        private Dictionary<IPEndPoint, GamePacketCoordinator> coordinators = new Dictionary<IPEndPoint, GamePacketCoordinator>();
+        public const int SIO_UDP_CONNRESET = -1744830452;
+        private Dictionary<IPEndPoint, GamePacketCoordinator> coordinators;
         private UdpClient udpServer;
         private const int port = 33333;
-        private IPEndPoint e;
         private GameWorld world;
         private bool running = true;
         private Int64 lastUpdateTime = 0;
 
+        public GameServer()
+        {
+            coordinators = new Dictionary<IPEndPoint, GamePacketCoordinator>();
+        }
+
         public void startServer()
         {
             world = new GameWorld();
-            e = new IPEndPoint(IPAddress.Any, port);
+            startUDPServer();
+            beginUpdates();
+        }
+
+        private void startUDPServer()
+        {
             udpServer = new UdpClient(port);
             udpServer.BeginReceive(new AsyncCallback(recv), null);
-            beginUpdates();
+
+            // Magic away the silly disconnection logic in UdpClient
+            udpServer.Client.IOControl(
+                (IOControlCode)SIO_UDP_CONNRESET,
+                new byte[] { 0, 0, 0, 0 },
+                null
+            );
         }
 
         public void shutdown()
@@ -61,23 +77,42 @@ namespace VrMMOServer
 
         private void recv(IAsyncResult ar)
         {
-            // Receive packet from UDP server
-            Byte[] receiveBytes = udpServer.EndReceive(ar, ref e);
-            udpServer.BeginReceive(new AsyncCallback(recv), null);
-
-            // Find or create packet coordinator
-            GamePacketCoordinator gpc;
-            if (!coordinators.TryGetValue(e, out gpc))
+            try
             {
-                OnlinePlayerEntity ope = new OnlinePlayerEntity();
-                ope.ip = e;
-                world.addEntity(ope);
-                gpc = new GamePacketCoordinator();
-                gpc.onlinePlayerEntity = ope;
-                coordinators.Add(e, gpc);
+                // Receive packet from UDP server
+                IPEndPoint ep = new IPEndPoint(IPAddress.Any, port);
+                Byte[] receiveBytes = udpServer.EndReceive(ar, ref ep);
+                udpServer.BeginReceive(new AsyncCallback(recv), null);
+                handleReceivedPacketData(receiveBytes, ep);
+            }
+            catch (SocketException e)
+            {
+                udpServer.BeginReceive(new AsyncCallback(recv), null);
                 lock (Program.consoleLock)
                 {
-                    Console.WriteLine("Added player");
+                    Console.WriteLine(e.ToString());
+                }
+            }
+        }
+
+        private void handleReceivedPacketData(Byte[] receiveBytes, IPEndPoint e)
+        {
+            // Find or create packet coordinator
+            GamePacketCoordinator gpc;
+            lock (coordinators)
+            {
+                if (!coordinators.TryGetValue(e, out gpc))
+                {
+                    OnlinePlayerEntity ope = new OnlinePlayerEntity();
+                    ope.ip = e;
+                    world.addEntity(ope);
+                    gpc = new GamePacketCoordinator();
+                    gpc.onlinePlayerEntity = ope;
+                    coordinators.Add(e, gpc);
+                    lock (Program.consoleLock)
+                    {
+                        Console.WriteLine("Added player");
+                    }
                 }
             }
 
@@ -128,7 +163,7 @@ namespace VrMMOServer
                     }
                     lock (Program.consoleLock)
                     {
-                        Console.WriteLine("Elapsed update time: " + stopWatch.ElapsedMilliseconds);
+                        //Console.WriteLine("Elapsed update time: " + stopWatch.ElapsedMilliseconds);
                     }
                 }
             }).Start();
