@@ -174,13 +174,20 @@ namespace VrMMOServer
             // For each game entity, send updates to each connection
             foreach (GameEntity ge in world.getAllEntities())
             {
-                EntityUpdatePacket eup = EntityUpdatePacket.fromEntity(ge);
-                foreach (GamePacketCoordinator gpc in coordinators.Values)
+                lock (coordinators)
                 {
-                    // If the game entity isn't bound to this connection, send an update.
-                    if (!gpc.boundToEntity(ge))
+                    EntityUpdatePacket eup = EntityUpdatePacket.fromEntity(ge);
+                    foreach (GamePacketCoordinator gpc in coordinators.Values)
                     {
-                        gpc.sendPacketToClient(udpServer, eup);
+                        // If the game entity isn't bound to this connection, send an update.
+                        if (!gpc.boundToEntity(ge))
+                        {
+                            gpc.sendPacketToClient(udpServer, eup);
+                            lock (Program.consoleLock)
+                            {
+                                Console.WriteLine("Sent packet: " + gpc.onlinePlayerEntity.ip.ToString());
+                            }
+                        }
                     }
                 }
             }
