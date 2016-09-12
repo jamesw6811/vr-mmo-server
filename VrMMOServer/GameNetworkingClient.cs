@@ -11,7 +11,7 @@ namespace VrMMOServer
 
     public class GameNetworkingClient
     {
-        public const string ipstring = "192.168.86.175";
+        public const string ipstring = "104.196.10.213";
         private GamePacketCoordinator coordinator;
         private UdpClient udpClient;
         private int port = 33333;
