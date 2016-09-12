@@ -61,13 +61,19 @@ namespace VrMMOServer
         {
             udpServer = new UdpClient(port);
             udpServer.BeginReceive(new AsyncCallback(recv), null);
-
-            // Magic away the silly disconnection logic in UdpClient
-            udpServer.Client.IOControl(
-                (IOControlCode)SIO_UDP_CONNRESET,
-                new byte[] { 0, 0, 0, 0 },
-                null
-            );
+	    try
+	    {
+            	// Magic away the silly disconnection logic in UdpClient
+            	udpServer.Client.IOControl(
+                	(IOControlCode)SIO_UDP_CONNRESET,
+                	new byte[] { 0, 0, 0, 0 },
+                	null
+            	);
+	    }
+	    catch
+	    {
+		Console.WriteLine("IOControl threw exception, SIO_UDP_CONNRESET option not set");
+	    }
         }
 
         public void shutdown()
