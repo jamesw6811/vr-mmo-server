@@ -22,9 +22,10 @@ namespace VrMMOServer
             //runClientTests();
             //runClientTests();
             Console.WriteLine("Game server listening...");
-            Console.ReadLine();
-            server.shutdown();
-            Console.ReadLine();
+            while (true)
+            {
+                Thread.Sleep(1000);
+            }
         }
 
         static void runClientTests()
@@ -117,7 +118,7 @@ namespace VrMMOServer
                     coordinators.Add(e, gpc);
                     lock (Program.consoleLock)
                     {
-                        Console.WriteLine("Added player");
+                        Console.WriteLine("Added player:" + e.ToString());
                     }
                 }
             }
@@ -127,12 +128,14 @@ namespace VrMMOServer
 
             handleGamePacket(gp, gpc.onlinePlayerEntity);
 
+            /*
             lock (Program.consoleLock)
             {
                 Console.WriteLine("Server Received: " + receiveBytes.Length.ToString());
                 Console.WriteLine(gp.GetType());
                 Console.WriteLine(gpc.getAckStatusString());
             }
+            */
         }
 
         /// <summary>
@@ -189,10 +192,12 @@ namespace VrMMOServer
                         if (!gpc.boundToEntity(ge))
                         {
                             gpc.sendPacketToClient(udpServer, eup);
+                            /*
                             lock (Program.consoleLock)
                             {
                                 Console.WriteLine("Sent packet: " + gpc.onlinePlayerEntity.ip.ToString());
                             }
+                            */
                         }
                     }
                 }
