@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -22,6 +23,11 @@ namespace VrMMOServer
 
         public OnlinePlayerEntity onlinePlayerEntity; // null on client
 
+        public Int64 timeLastPacketSent;
+        public Int64 timeLastPacketReceived;
+
+        public bool readyForDisconnect;
+
         // Running in server mode
         public GamePacketCoordinator()
         {
@@ -30,11 +36,22 @@ namespace VrMMOServer
             ack_sequence_id = 0;
             their_ack_sequence_id = 0;
             their_ack_bitfield = 0;
+            readyForDisconnect = false;
         }
 
         public bool boundToEntity(GameEntity ge)
         {
             return ge.id == onlinePlayerEntity.id;
+        }
+
+        public void setReadyForDisconnect()
+        {
+            readyForDisconnect = true;
+        }
+
+        public bool isReadyForDisconnect()
+        {
+            return readyForDisconnect;
         }
 
         public GamePacket parseIncomingPacket(Byte[] data)
@@ -47,6 +64,9 @@ namespace VrMMOServer
             {
                 Console.WriteLine("Protocol error!");
             }
+
+            // Log time packet received
+            timeLastPacketReceived = GameServer.getServerStopwatchMillis();
 
             // Update our acknowledge sequence + bitfield
             UInt16 sequence_id = ndr.getUInt16();
@@ -61,6 +81,8 @@ namespace VrMMOServer
             UInt16 packet_type = ndr.getUInt16();
             switch (packet_type)
             {
+                case PingPacket.packet_type:
+                    return PingPacket.fromData(ndr);
                 case EntityUpdatePacket.packet_type:
                     return EntityUpdatePacket.fromData(ndr);
             }
@@ -83,7 +105,15 @@ namespace VrMMOServer
             writeNextPacketHeader(ndw);
             gp.write(ndw);
             byte[] bytes = ndw.getByteArray();
-            client.Send(bytes, bytes.Length, e);
+            try
+            {
+                client.Send(bytes, bytes.Length, e);
+                timeLastPacketSent = GameServer.getServerStopwatchMillis();
+            }
+            catch (ObjectDisposedException err)
+            {
+                return;
+            }
         }
 
         private void writeNextPacketHeader(NetworkDataWriter ndw)
@@ -167,6 +197,26 @@ namespace VrMMOServer
 
         abstract protected void writePacketInfo(NetworkDataWriter ndw);
         abstract protected UInt16 getPacketTypeCode();
+    }
+
+    public class PingPacket : GamePacket
+    {
+        public const UInt16 packet_type = 0x0000;
+
+        public static PingPacket fromData(NetworkDataReader ndr)
+        {
+            return new PingPacket();
+        }
+
+        protected override UInt16 getPacketTypeCode()
+        {
+            return packet_type;
+        }
+
+        protected override void writePacketInfo(NetworkDataWriter ndw)
+        {
+            return;
+        }
     }
 
     public class EntityUpdatePacket : GamePacket

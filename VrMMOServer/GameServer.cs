@@ -19,36 +19,55 @@ namespace VrMMOServer
             Console.WriteLine("Starting game server...");
             GameServer server = new GameServer();
             server.startServer();
-            //runClientTests();
-            //runClientTests();
             Console.WriteLine("Game server listening...");
             while (true)
             {
                 Thread.Sleep(1000);
             }
         }
-
-        static void runClientTests()
-        {
-            GameNetworkingClient gc = new GameNetworkingClient();
-            gc.startClient();
-            gc.startTestSequence();
-        }
     }
 
-    class GameServer
+    public class GameServer
     {
         public const int SIO_UDP_CONNRESET = -1744830452;
+        public const Int64 MILLIS_PER_UPDATE = 1000 / 30;
+        private static long MILLIS_STOPWATCH_FREQUENCY_DIVIDER = Stopwatch.Frequency / 1000;
         private Dictionary<IPEndPoint, GamePacketCoordinator> coordinators;
+        private Queue<ReceivedPacket> receivedPackets;
         private UdpClient udpServer;
         private const int port = 33333;
         private GameWorld world;
         private bool running = true;
-        private Int64 lastUpdateTime = 0;
 
         public GameServer()
         {
             coordinators = new Dictionary<IPEndPoint, GamePacketCoordinator>();
+            receivedPackets = new Queue<ReceivedPacket>();
+        }
+
+        public static long getServerStopwatchMillis()
+        {
+            return Stopwatch.GetTimestamp() / MILLIS_STOPWATCH_FREQUENCY_DIVIDER;
+        }
+
+        public bool hasConnectedEndpoint(IPEndPoint e)
+        {
+            bool hasConnected = false;
+            lock (coordinators)
+            {
+                hasConnected = coordinators.ContainsKey(e);
+            }
+            return hasConnected;
+        }
+
+        public int connectedEndpointCount()
+        {
+            int connections = 0;
+            lock (coordinators)
+            {
+                connections = coordinators.Count;
+            }
+            return connections;
         }
 
         public void startServer()
@@ -62,24 +81,25 @@ namespace VrMMOServer
         {
             udpServer = new UdpClient(port);
             udpServer.BeginReceive(new AsyncCallback(recv), null);
-	    try
-	    {
-            	// Magic away the silly disconnection logic in UdpClient
-            	udpServer.Client.IOControl(
-                	(IOControlCode)SIO_UDP_CONNRESET,
-                	new byte[] { 0, 0, 0, 0 },
-                	null
-            	);
-	    }
-	    catch
-	    {
-		Console.WriteLine("IOControl threw exception, SIO_UDP_CONNRESET option not set");
-	    }
+	        try
+	        {
+                // Magic away the silly disconnection logic in UdpClient
+                udpServer.Client.IOControl(
+                    (IOControlCode)SIO_UDP_CONNRESET,
+                    new byte[] { 0, 0, 0, 0 },
+                    null
+                );
+	        }
+	        catch
+	        {
+		        Console.WriteLine("IOControl threw exception, SIO_UDP_CONNRESET option not set");
+	        }
         }
 
         public void shutdown()
         {
             running = false;
+            udpServer.Close();
         }
 
         private void recv(IAsyncResult ar)
@@ -90,7 +110,10 @@ namespace VrMMOServer
                 IPEndPoint ep = new IPEndPoint(IPAddress.Any, port);
                 Byte[] receiveBytes = udpServer.EndReceive(ar, ref ep);
                 udpServer.BeginReceive(new AsyncCallback(recv), null);
-                handleReceivedPacketData(receiveBytes, ep);
+                lock (receivedPackets)
+                {
+                    receivedPackets.Enqueue(new ReceivedPacket(receiveBytes, ep));
+                }
             }
             catch (SocketException e)
             {
@@ -99,6 +122,10 @@ namespace VrMMOServer
                 {
                     Console.WriteLine(e.ToString());
                 }
+            }
+            catch (ObjectDisposedException e)
+            {
+                return;
             }
         }
 
@@ -127,15 +154,7 @@ namespace VrMMOServer
             GamePacket gp = gpc.parseIncomingPacket(receiveBytes);
 
             handleGamePacket(gp, gpc.onlinePlayerEntity);
-
-            /*
-            lock (Program.consoleLock)
-            {
-                Console.WriteLine("Server Received: " + receiveBytes.Length.ToString());
-                Console.WriteLine(gp.GetType());
-                Console.WriteLine(gpc.getAckStatusString());
-            }
-            */
+            
         }
 
         /// <summary>
@@ -149,7 +168,10 @@ namespace VrMMOServer
             {
                 EntityUpdatePacket eup = (EntityUpdatePacket)gp;
                 eup.id = ope.id;
-                world.updateEntity(eup);
+                lock (world)
+                {
+                    world.updateEntity(eup);
+                }
             }
         }
 
@@ -160,25 +182,101 @@ namespace VrMMOServer
         {
             new Thread(() =>
             {
-                Stopwatch stopWatch = new Stopwatch();
+                Int64 nextLoopTime = getServerStopwatchMillis();
                 while (running)
                 {
-                    stopWatch.Reset();
-                    stopWatch.Start();
-                    runUpdateLoop();
-                    while (stopWatch.ElapsedMilliseconds < 1000/30)
+                    while (getServerStopwatchMillis() < nextLoopTime)
                     {
-                        Thread.Sleep(1);
+                        Thread.SpinWait(1);
                     }
-                    lock (Program.consoleLock)
+                    runUpdateLoop();
+                    nextLoopTime += MILLIS_PER_UPDATE;
+                    if (getServerStopwatchMillis() >= nextLoopTime)
                     {
-                        //Console.WriteLine("Elapsed update time: " + stopWatch.ElapsedMilliseconds);
+                        throw new TimeoutException("Update loop took too long to run. Server failing hard. " + getServerStopwatchMillis().ToString());
                     }
                 }
             }).Start();
         }
 
         private void runUpdateLoop()
+        {
+            handleReceivedPacketQueue();
+            updateWorldViews();
+            updateConnections();
+        }
+
+        private void updateConnections()
+        {
+            Int64 pingThreshold = getServerStopwatchMillis() - MILLIS_PER_UPDATE * 2;
+            Int64 disconnectThreshold = getServerStopwatchMillis() - 3000;
+            lock (coordinators)
+            {
+                List<IPEndPoint> ipsToRemove = new List<IPEndPoint>();
+                foreach (GamePacketCoordinator gpc in coordinators.Values)
+                {
+                    sendPingPacket(gpc, pingThreshold);
+                    updateConnectionStatus(gpc, disconnectThreshold);
+                    if (gpc.isReadyForDisconnect())
+                    {
+                        ipsToRemove.Add(gpc.onlinePlayerEntity.ip);
+                    }
+                }
+                foreach (IPEndPoint e in ipsToRemove)
+                {
+                    coordinators.Remove(e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handle all queued received packet data
+        /// </summary>
+        private void handleReceivedPacketQueue()
+        {
+            lock (receivedPackets) { 
+                while (receivedPackets.Any())
+                {
+                    ReceivedPacket rp = receivedPackets.Dequeue();
+                    handleReceivedPacketData(rp.data, rp.endpoint);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Send an idling packet to each connection if no other packets have been sent.
+        /// </summary>
+        private void sendPingPacket(GamePacketCoordinator gpc, Int64 pingThreshold)
+        {
+            if (gpc.timeLastPacketSent < pingThreshold)
+            {
+                PingPacket pp = new PingPacket();
+                gpc.sendPacketToClient(udpServer, pp);
+            }
+        }
+
+        /// <summary>
+        /// Update each connections status based on last packet times
+        /// </summary>
+        private void updateConnectionStatus(GamePacketCoordinator gpc, Int64 disconnectThreshold)
+        {
+            if (gpc.timeLastPacketReceived < disconnectThreshold)
+            {
+                gpc.setReadyForDisconnect();
+            }
+            if (gpc.isReadyForDisconnect())
+            {
+                lock (world)
+                {
+                    world.removeEntity(gpc.onlinePlayerEntity);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Update view of the world for all connected players.
+        /// </summary>
+        private void updateWorldViews()
         {
             // For each game entity, send updates to each connection
             foreach (GameEntity ge in world.getAllEntities())
@@ -192,18 +290,24 @@ namespace VrMMOServer
                         if (!gpc.boundToEntity(ge))
                         {
                             gpc.sendPacketToClient(udpServer, eup);
-                            /*
-                            lock (Program.consoleLock)
-                            {
-                                Console.WriteLine("Sent packet: " + gpc.onlinePlayerEntity.ip.ToString());
-                            }
-                            */
                         }
                     }
                 }
             }
         }
        
+    }
+
+    class ReceivedPacket
+    {
+        public IPEndPoint endpoint;
+        public Byte[] data;
+
+        public ReceivedPacket(Byte[] d, IPEndPoint e)
+        {
+            endpoint = e;
+            data = d;
+        }
     }
 
 }
