@@ -193,7 +193,7 @@ namespace VrMMOServer
                     nextLoopTime += MILLIS_PER_UPDATE;
                     if (getServerStopwatchMillis() >= nextLoopTime)
                     {
-                        throw new TimeoutException("Update loop took too long to run. Server failing hard. " + getServerStopwatchMillis().ToString());
+                        
                     }
                 }
             }).Start();
