@@ -190,9 +190,11 @@ namespace VrMMOServer
                     // Loop time restriction
                     while (getServerStopwatchMillis() < nextLoopTime)
                     {
+                        Thread.Sleep(1);
                     }
                     Console.WriteLine("Running update loop:" + getServerStopwatchMillis());
                     runUpdateLoop();
+                    Console.WriteLine("Finishing update loop:" + getServerStopwatchMillis());
                     nextLoopTime += MILLIS_PER_UPDATE;
 
                     // Status update
@@ -297,9 +299,9 @@ namespace VrMMOServer
         {
             Int64 pingThreshold = getServerStopwatchMillis() - MILLIS_PER_UPDATE * 2;
             Int64 disconnectThreshold = getServerStopwatchMillis() - 3000;
+            List<IPEndPoint> ipsToRemove = new List<IPEndPoint>();
             lock (coordinators)
             {
-                List<IPEndPoint> ipsToRemove = new List<IPEndPoint>();
                 foreach (GamePacketCoordinator gpc in coordinators.Values)
                 {
                     sendPingPacket(gpc, pingThreshold);
