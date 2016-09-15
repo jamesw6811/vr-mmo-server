@@ -31,6 +31,7 @@ namespace VrMMOServer
     {
         public const int SIO_UDP_CONNRESET = -1744830452;
         public const Int64 MILLIS_PER_UPDATE = 1000 / 30;
+        public const Int64 MILLIS_PER_STATUS_UPDATE = 1000 * 5;
         private static long MILLIS_STOPWATCH_FREQUENCY_DIVIDER = Stopwatch.Frequency / 1000;
         private Dictionary<IPEndPoint, GamePacketCoordinator> coordinators;
         private Queue<ReceivedPacket> receivedPackets;
@@ -183,6 +184,7 @@ namespace VrMMOServer
             new Thread(() =>
             {
                 Int64 nextLoopTime = getServerStopwatchMillis();
+                Int64 nextStatusUpdateTime = getServerStopwatchMillis();
                 while (running)
                 {
                     while (getServerStopwatchMillis() < nextLoopTime)
@@ -191,6 +193,11 @@ namespace VrMMOServer
                     }
                     runUpdateLoop();
                     nextLoopTime += MILLIS_PER_UPDATE;
+                    if (getServerStopwatchMillis() > nextStatusUpdateTime)
+                    {
+                        nextStatusUpdateTime += MILLIS_PER_STATUS_UPDATE;
+                        doStatusUpdate();
+                    }
                     if (getServerStopwatchMillis() >= nextLoopTime)
                     {
                         
@@ -199,11 +206,35 @@ namespace VrMMOServer
             }).Start();
         }
 
+
+        private void doStatusUpdate()
+        {
+            Console.WriteLine("\n\n------ Status Update ------");
+            Console.WriteLine("Packets/seconds: " + GamePacketCoordinator.packetsPerSecond().ToString());
+            Console.WriteLine("Packets total: " + GamePacketCoordinator.packetsTotal().ToString());
+            Console.WriteLine("Time now: " + GameServer.getServerStopwatchMillis().ToString());
+            Console.WriteLine("Packet Receiving: " + packetReceivingDuration.ToString());
+            Console.WriteLine("Worldview Sending: " + worldViewSendingDuration.ToString());
+            Console.WriteLine("Connection Updating: " + updateConnectionsDuration.ToString());
+            Console.WriteLine("-----------------------------\n\n");
+        }
+
+        private Int64 packetReceivingDuration = 0;
+        private Int64 worldViewSendingDuration = 0;
+        private Int64 updateConnectionsDuration = 0;
         private void runUpdateLoop()
         {
+            packetReceivingDuration = getServerStopwatchMillis();
             handleReceivedPacketQueue();
+            packetReceivingDuration = getServerStopwatchMillis() - packetReceivingDuration;
+
+            worldViewSendingDuration = getServerStopwatchMillis();
             updateWorldViews();
+            worldViewSendingDuration = getServerStopwatchMillis() - worldViewSendingDuration;
+
+            updateConnectionsDuration = getServerStopwatchMillis();
             updateConnections();
+            updateConnectionsDuration = getServerStopwatchMillis() - updateConnectionsDuration;
         }
 
         private void updateConnections()

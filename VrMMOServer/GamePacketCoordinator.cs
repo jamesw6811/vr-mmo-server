@@ -14,6 +14,8 @@ namespace VrMMOServer
         private const UInt32 default_protocol = 0xDEADBEEF;
         private const UInt16 max_sequence = 65535;
         private const UInt16 max_bitfield = 32;
+        private static Int64 packets_sent = 0;
+        private static Int64 time_start = GameServer.getServerStopwatchMillis();
         private UInt16 next_sequence_to_send = 0;
         private UInt32 our_ack_bitfield;
         private UInt16 ack_sequence_id;
@@ -107,13 +109,29 @@ namespace VrMMOServer
             byte[] bytes = ndw.getByteArray();
             try
             {
-                client.Send(bytes, bytes.Length, e);
+                client.BeginSend(bytes, bytes.Length, e, new AsyncCallback(sentPacket), null);
                 timeLastPacketSent = GameServer.getServerStopwatchMillis();
+                packets_sent++;
             }
             catch (ObjectDisposedException err)
             {
                 return;
             }
+        }
+
+        private void sentPacket(IAsyncResult ia)
+        {
+        }
+
+        public static Int64 packetsTotal()
+        {
+            return packets_sent;
+        }
+
+        public static Int64 packetsPerSecond()
+        {
+            if (GameServer.getServerStopwatchMillis() == time_start) return 0;
+            return packets_sent * 1000 / (GameServer.getServerStopwatchMillis() - time_start);
         }
 
         private void writeNextPacketHeader(NetworkDataWriter ndw)
