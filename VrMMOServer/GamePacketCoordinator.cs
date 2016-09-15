@@ -112,7 +112,6 @@ namespace VrMMOServer
             {
                 client.BeginSend(bytes, bytes.Length, e, new AsyncCallback(sentPacket), null);
                 timeLastPacketSent = GameServer.getServerStopwatchMillis();
-                Console.WriteLine("Packet sent:" + timeLastPacketSent);
                 packets_sent++;
             }
             catch (ObjectDisposedException err)

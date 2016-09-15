@@ -19,7 +19,7 @@ namespace ConsoleApplication1
         public void run()
         {
             GameNetworkingClient gnc;
-            for (int x = 0; x < 0; x++)
+            for (int x = 0; x < 1; x++)
             {
                 gnc = getGNP();
                 gnc.startClient();

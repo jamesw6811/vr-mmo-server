@@ -70,7 +70,7 @@ namespace VrMMOServer
                 {
                     while (GameServer.getServerStopwatchMillis() < nextLoopTime)
                     {
-                        Thread.SpinWait(1);
+                        Thread.Sleep(1);
                     }
                     runUpdateLoop();
                     nextLoopTime += MILLIS_PER_UPDATE;
@@ -101,10 +101,6 @@ namespace VrMMOServer
 
         private void recv(IAsyncResult ar)
         {
-            if(gamePacketListener!= null)
-            {
-                Console.WriteLine("recv");
-            }
             try
             {
                 Byte[] receiveBytes = udpClient.EndReceive(ar, ref e);

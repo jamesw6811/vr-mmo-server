@@ -187,17 +187,22 @@ namespace VrMMOServer
                 Int64 nextStatusUpdateTime = getServerStopwatchMillis();
                 while (running)
                 {
+                    // Loop time restriction
                     while (getServerStopwatchMillis() < nextLoopTime)
                     {
-                        Thread.SpinWait(1);
                     }
+                    Console.WriteLine("Running update loop:" + getServerStopwatchMillis());
                     runUpdateLoop();
                     nextLoopTime += MILLIS_PER_UPDATE;
+
+                    // Status update
                     if (getServerStopwatchMillis() > nextStatusUpdateTime)
                     {
                         nextStatusUpdateTime += MILLIS_PER_STATUS_UPDATE;
                         doStatusUpdate();
                     }
+
+                    // Over time check
                     if (getServerStopwatchMillis() >= nextLoopTime)
                     {
                         
