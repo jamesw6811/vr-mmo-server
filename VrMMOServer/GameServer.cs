@@ -237,28 +237,6 @@ namespace VrMMOServer
             updateConnectionsDuration = getServerStopwatchMillis() - updateConnectionsDuration;
         }
 
-        private void updateConnections()
-        {
-            Int64 pingThreshold = getServerStopwatchMillis() - MILLIS_PER_UPDATE * 2;
-            Int64 disconnectThreshold = getServerStopwatchMillis() - 3000;
-            lock (coordinators)
-            {
-                List<IPEndPoint> ipsToRemove = new List<IPEndPoint>();
-                foreach (GamePacketCoordinator gpc in coordinators.Values)
-                {
-                    sendPingPacket(gpc, pingThreshold);
-                    updateConnectionStatus(gpc, disconnectThreshold);
-                    if (gpc.isReadyForDisconnect())
-                    {
-                        ipsToRemove.Add(gpc.onlinePlayerEntity.ip);
-                    }
-                }
-                foreach (IPEndPoint e in ipsToRemove)
-                {
-                    coordinators.Remove(e);
-                }
-            }
-        }
 
         /// <summary>
         /// Handle all queued received packet data
@@ -286,23 +264,6 @@ namespace VrMMOServer
             }
         }
 
-        /// <summary>
-        /// Update each connections status based on last packet times
-        /// </summary>
-        private void updateConnectionStatus(GamePacketCoordinator gpc, Int64 disconnectThreshold)
-        {
-            if (gpc.timeLastPacketReceived < disconnectThreshold)
-            {
-                gpc.setReadyForDisconnect();
-            }
-            if (gpc.isReadyForDisconnect())
-            {
-                lock (world)
-                {
-                    world.removeEntity(gpc.onlinePlayerEntity);
-                }
-            }
-        }
 
         /// <summary>
         /// Update view of the world for all connected players.
@@ -326,8 +287,51 @@ namespace VrMMOServer
                 }
             }
         }
-       
+
+        private void updateConnections()
+        {
+            Int64 pingThreshold = getServerStopwatchMillis() - MILLIS_PER_UPDATE * 2;
+            Int64 disconnectThreshold = getServerStopwatchMillis() - 3000;
+            lock (coordinators)
+            {
+                List<IPEndPoint> ipsToRemove = new List<IPEndPoint>();
+                foreach (GamePacketCoordinator gpc in coordinators.Values)
+                {
+                    sendPingPacket(gpc, pingThreshold);
+                    updateConnectionStatus(gpc, disconnectThreshold);
+                    if (gpc.isReadyForDisconnect())
+                    {
+                        ipsToRemove.Add(gpc.onlinePlayerEntity.ip);
+                    }
+                }
+                foreach (IPEndPoint e in ipsToRemove)
+                {
+                    coordinators.Remove(e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Update each connections status based on last packet times
+        /// </summary>
+        private void updateConnectionStatus(GamePacketCoordinator gpc, Int64 disconnectThreshold)
+        {
+            if (gpc.timeLastPacketReceived < disconnectThreshold)
+            {
+                gpc.setReadyForDisconnect();
+                Console.WriteLine("Player left:" + gpc.onlinePlayerEntity.ip.ToString());
+            }
+            if (gpc.isReadyForDisconnect())
+            {
+                lock (world)
+                {
+                    world.removeEntity(gpc.onlinePlayerEntity);
+                }
+            }
+        }
     }
+
+
 
     class ReceivedPacket
     {

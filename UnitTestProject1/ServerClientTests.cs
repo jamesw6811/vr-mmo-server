@@ -42,13 +42,21 @@ namespace VrMMOServerTests
         public void TestServerManyClients()
         {
             GameNetworkingClient gnc;
-            for (int x = 0; x < 40; x++)
+            for (int x = 0; x < 3; x++)
             {
-                gnc = new GameNetworkingClient("127.0.0.1");
+                gnc = new GameNetworkingClient();
                 gnc.startClient();
+                new Thread(() =>
+                {
+                    while (true)
+                    {
+                        Thread.Sleep(20);
+                        gnc.sendUpdatePlayer(new EntityUpdatePacket());
+                    }
+                }).Start();
                 Thread.Sleep(100);
             }
-            Thread.Sleep(2000);
+            Thread.Sleep(200000);
         }
     }
 }

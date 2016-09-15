@@ -39,6 +39,7 @@ namespace VrMMOServer
             their_ack_sequence_id = 0;
             their_ack_bitfield = 0;
             readyForDisconnect = false;
+            timeLastPacketReceived = Int64.MaxValue;
         }
 
         public bool boundToEntity(GameEntity ge)
@@ -111,6 +112,7 @@ namespace VrMMOServer
             {
                 client.BeginSend(bytes, bytes.Length, e, new AsyncCallback(sentPacket), null);
                 timeLastPacketSent = GameServer.getServerStopwatchMillis();
+                Console.WriteLine("Packet sent:" + timeLastPacketSent);
                 packets_sent++;
             }
             catch (ObjectDisposedException err)
