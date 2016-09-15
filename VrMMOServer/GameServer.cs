@@ -192,9 +192,7 @@ namespace VrMMOServer
                     {
                         Thread.Sleep(1);
                     }
-                    Console.WriteLine("Running update loop:" + getServerStopwatchMillis());
                     runUpdateLoop();
-                    Console.WriteLine("Finishing update loop:" + getServerStopwatchMillis());
                     nextLoopTime += MILLIS_PER_UPDATE;
 
                     // Status update
