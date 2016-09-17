@@ -19,42 +19,17 @@ namespace ConsoleApplication1
         public void run()
         {
             Console.WriteLine("Starting server");
-            startServer();
 
-            GameNetworkingClient gnc;
-            for (int x = 0; x < 1; x++)
+            while (true)
             {
-                gnc = getGNP();
-                gnc.startClient();
-                new Thread(() =>
-                {
-                    for (int y = 0; y < 50; y++)
-                    {
-                        Thread.Sleep(20);
-                        gnc.sendUpdatePlayer(new EntityUpdatePacket());
-                    }
-                    gnc.shutdown();
-                }).Start();
-                Thread.Sleep(100);
+                startServer();
+                fakeForwardMovingClient(10000, 5);
+                fakeListeningClient();
+
+                Thread.Sleep(20000);
+                shutdownServer();
             }
 
-            GameNetworkingClient gnc2;
-            gnc2 = getGNP();
-            gnc2.startClient();
-            gnc2.registerPacketListener(this);
-            new Thread(() =>
-            {
-                while (true)
-                {
-                    Thread.Sleep(20);
-                    gnc2.sendUpdatePlayer(new EntityUpdatePacket());
-                }
-            }).Start();
-            Thread.Sleep(6000);
-
-            Debug.Assert(removePacketsReceived == 1);
-
-            Console.ReadLine();
         }
 
         public GameNetworkingClient getGNP()
@@ -72,10 +47,52 @@ namespace ConsoleApplication1
             }
         }
 
+        GameServer gs;
         public void startServer()
         {
-            GameServer gs = new GameServer();
+            gs = new GameServer();
             gs.startServer();
+        }
+
+        public void shutdownServer()
+        {
+            gs.shutdown();
+        }
+
+        public void fakeListeningClient()
+        {
+            GameNetworkingClient gnc2;
+            gnc2 = getGNP();
+            gnc2.startClient();
+            gnc2.registerPacketListener(this);
+            new Thread(() =>
+            {
+                while (true)
+                {
+                    Thread.Sleep(20);
+                    gnc2.sendUpdatePlayer(new EntityUpdatePacket());
+                }
+            }).Start();
+        }
+
+        public void fakeForwardMovingClient(UInt32 time, float distance)
+        {
+            GameNetworkingClient gnc;
+            gnc = getGNP();
+            gnc.startClient();
+            float ypos = 0;
+            new Thread(() =>
+            {
+                for (int i = 0; i < time/20; i++)
+                {
+                    Thread.Sleep(20);
+                    EntityUpdatePacket eup = new EntityUpdatePacket();
+                    ypos += distance / (time / 20);
+                    eup.y = ypos;
+                    gnc.sendUpdatePlayer(eup);
+                }
+                gnc.shutdown();
+            }).Start();
         }
     }
 }

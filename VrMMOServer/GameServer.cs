@@ -118,7 +118,6 @@ namespace VrMMOServer
             }
             catch (SocketException e)
             {
-                udpServer.BeginReceive(new AsyncCallback(recv), null);
                 lock (Program.consoleLock)
                 {
                     Console.WriteLine(e.ToString());
