@@ -275,6 +275,19 @@ namespace VrMMOServer
         /// </summary>
         private void updateWorldViews()
         {
+            // For any removed entities, send removal notifications
+            foreach (GameEntity ge in world.pullRemovedEntities())
+            {
+                lock (coordinators)
+                {
+                    EntityRemovePacket erp = EntityRemovePacket.fromEntity(ge);
+                    foreach (GamePacketCoordinator gpc in coordinators.Values)
+                    {
+                        gpc.sendPacketToClient(udpServer, erp);
+                    }
+                }
+            }
+
             // For each game entity, send updates to each connection
             foreach (GameEntity ge in world.getAllEntities())
             {

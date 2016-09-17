@@ -106,6 +106,7 @@ namespace VrMMOServer
                 Byte[] receiveBytes = udpClient.EndReceive(ar, ref e);
 
                 udpClient.BeginReceive(new AsyncCallback(recv), null);
+                
 
                 GamePacket gp = coordinator.parseIncomingPacket(receiveBytes);
                 notifyPacketListeners(gp);
@@ -115,7 +116,6 @@ namespace VrMMOServer
             }
             catch (ObjectDisposedException e)
             {
-                return;
             }
 
         }

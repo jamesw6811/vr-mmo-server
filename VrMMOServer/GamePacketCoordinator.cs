@@ -88,6 +88,8 @@ namespace VrMMOServer
                     return PingPacket.fromData(ndr);
                 case EntityUpdatePacket.packet_type:
                     return EntityUpdatePacket.fromData(ndr);
+                case EntityRemovePacket.packet_type:
+                    return EntityRemovePacket.fromData(ndr);
             }
             return null;
         }
@@ -115,6 +117,10 @@ namespace VrMMOServer
                 packets_sent++;
             }
             catch (ObjectDisposedException err)
+            {
+                return;
+            }
+            catch (SocketException err)
             {
                 return;
             }
@@ -235,6 +241,35 @@ namespace VrMMOServer
         protected override void writePacketInfo(NetworkDataWriter ndw)
         {
             return;
+        }
+    }
+
+    public class EntityRemovePacket : GamePacket
+    {
+        public const UInt16 packet_type = 0x0002;
+        public UInt32 id;
+        public static EntityRemovePacket fromData(NetworkDataReader ndr)
+        {
+            EntityRemovePacket erp = new EntityRemovePacket();
+            erp.id = ndr.getUInt32();
+            return erp;
+        }
+
+        protected override ushort getPacketTypeCode()
+        {
+            return packet_type;
+        }
+
+        protected override void writePacketInfo(NetworkDataWriter ndw)
+        {
+            ndw.writeUInt32(id);
+        }
+
+        internal static EntityRemovePacket fromEntity(GameEntity ge)
+        {
+            EntityRemovePacket erp = new EntityRemovePacket();
+            erp.id = ge.id;
+            return erp;
         }
     }
 

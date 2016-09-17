@@ -18,6 +18,9 @@ namespace ConsoleApplication1
         public Stopwatch sw = Stopwatch.StartNew();
         public void run()
         {
+            Console.WriteLine("Starting server");
+            startServer();
+
             GameNetworkingClient gnc;
             for (int x = 0; x < 1; x++)
             {
@@ -25,40 +28,54 @@ namespace ConsoleApplication1
                 gnc.startClient();
                 new Thread(() =>
                 {
-                    while (true)
+                    for (int y = 0; y < 50; y++)
                     {
                         Thread.Sleep(20);
                         gnc.sendUpdatePlayer(new EntityUpdatePacket());
                     }
+                    gnc.shutdown();
                 }).Start();
                 Thread.Sleep(100);
             }
-            gnc = getGNP();
-            gnc.startClient();
-            gnc.registerPacketListener(this);
+
+            GameNetworkingClient gnc2;
+            gnc2 = getGNP();
+            gnc2.startClient();
+            gnc2.registerPacketListener(this);
             new Thread(() =>
             {
                 while (true)
                 {
                     Thread.Sleep(20);
-                    gnc.sendUpdatePlayer(new EntityUpdatePacket());
+                    gnc2.sendUpdatePlayer(new EntityUpdatePacket());
                 }
             }).Start();
-            Thread.Sleep(100);
+            Thread.Sleep(6000);
+
+            Debug.Assert(removePacketsReceived == 1);
 
             Console.ReadLine();
         }
 
         public GameNetworkingClient getGNP()
         {
-            return new GameNetworkingClient();
+            return new GameNetworkingClient("127.0.0.1");
         }
 
         public long packetsReceived = 0;
+        public long removePacketsReceived = 0;
         public void receiveGamePacket(GamePacket gp)
         {
-            Console.WriteLine(packetsReceived++);
-            Console.WriteLine(sw.ElapsedMilliseconds);
+            if (gp is EntityRemovePacket)
+            {
+                Console.WriteLine("Remove packets: " + ++removePacketsReceived);
+            }
+        }
+
+        public void startServer()
+        {
+            GameServer gs = new GameServer();
+            gs.startServer();
         }
     }
 }
