@@ -19,6 +19,7 @@ namespace VrMMOServer
         private int port = 33333;
         private IPEndPoint e;
         private GamePacketListener gamePacketListener = null;
+        private EntityUpdatePacket lastPlayerUpdate = null;
 
         public GameNetworkingClient()
         {
@@ -84,10 +85,26 @@ namespace VrMMOServer
 
         private void runUpdateLoop()
         {
-            if (GameServer.getServerStopwatchMillis() - coordinator.timeLastPacketSent > MILLIS_PER_UPDATE*2)
+            // Send player position update if there is a new one.
+            if (lastPlayerUpdate != null)
             {
-                PingPacket pp = new PingPacket();
-                coordinator.sendPacketToServer(udpClient, pp);
+                coordinator.addPacketToSendQueue(lastPlayerUpdate);
+                lastPlayerUpdate = null;
+            }
+            else
+            {
+                if (GameServer.getServerStopwatchMillis() - coordinator.timeLastPacketSent > MILLIS_PER_UPDATE * 2)
+                {
+                    PingPacket pp = new PingPacket();
+                    coordinator.addPacketToSendQueue(pp);
+                }
+            }
+
+            // Send and receive packets and notify listeners of latest packets.
+            List<GamePacket> gp_list = coordinator.sendAndReceiveQueuedPackets(udpClient);
+            foreach (GamePacket gp in gp_list)
+            {
+                notifyPacketListeners(gp);
             }
         }
 
@@ -106,10 +123,8 @@ namespace VrMMOServer
                 Byte[] receiveBytes = udpClient.EndReceive(ar, ref e);
 
                 udpClient.BeginReceive(new AsyncCallback(recv), null);
-                
 
-                GamePacket gp = coordinator.parseIncomingPacket(receiveBytes);
-                notifyPacketListeners(gp);
+                coordinator.queueIncomingPacketData(new ReceivedDataPacket(receiveBytes, null));
             }
             catch (SocketException e)
             {
@@ -122,7 +137,7 @@ namespace VrMMOServer
 
         public void sendUpdatePlayer(EntityUpdatePacket eup)
         {
-            coordinator.sendPacketToServer(udpClient, eup);
+            lastPlayerUpdate = eup;
         }
         
     }

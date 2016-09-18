@@ -16,6 +16,9 @@ namespace VrMMOServer
         private const UInt16 max_bitfield = 32;
         private static Int64 packets_sent = 0;
         private static Int64 time_start = GameServer.getServerStopwatchMillis();
+        private Queue<GamePacket> gamePacketSendQueue;
+        private Queue<ReceivedDataPacket> receivedPacketQueue;
+
         private UInt16 next_sequence_to_send = 0;
         private UInt32 our_ack_bitfield;
         private UInt16 ack_sequence_id;
@@ -40,6 +43,8 @@ namespace VrMMOServer
             their_ack_bitfield = 0;
             readyForDisconnect = false;
             timeLastPacketReceived = Int64.MaxValue;
+            gamePacketSendQueue = new Queue<GamePacket>();
+            receivedPacketQueue = new Queue<ReceivedDataPacket>();
         }
 
         public bool boundToEntity(GameEntity ge)
@@ -57,8 +62,9 @@ namespace VrMMOServer
             return readyForDisconnect;
         }
 
-        public GamePacket parseIncomingPacket(Byte[] data)
+        protected GamePacket parseIncomingPacket(ReceivedDataPacket dp)
         {
+            Byte[] data = dp.data;
             NetworkDataReader ndr = new NetworkDataReader(data);
 
             // Check that protocol matches
@@ -94,25 +100,82 @@ namespace VrMMOServer
             return null;
         }
 
-        public void sendPacketToClient(UdpClient client, GamePacket gp)
+        public void queueIncomingPacketData(ReceivedDataPacket rdp)
         {
-            sendPacket(client, gp, onlinePlayerEntity.ip);
+            lock (this)
+            {
+                receivedPacketQueue.Enqueue(rdp);
+            }
         }
 
-        public void sendPacketToServer(UdpClient client, GamePacket gp)
+        public void addPacketToSendQueue(GamePacket gp)
         {
-            sendPacket(client, gp, null);
+            lock (this)
+            {
+                gamePacketSendQueue.Enqueue(gp);
+            }
         }
 
-        protected void sendPacket(UdpClient client, GamePacket gp, IPEndPoint e)
+        /// <summary>
+        /// Sends and parses data queued from and to client. This method is done in one action
+        /// so that packets can be effectively packed and encoded with acknowledgement bits.
+        /// </summary>
+        /// <param name="client"></param>
+        /// <returns></returns>
+        public List<GamePacket> sendAndReceiveQueuedPackets(UdpClient client)
         {
+            List<GamePacket> receivedPackets = new List<GamePacket>();
+            lock (this)
+            {
+                // TODO: handle re-sending of unacknowledged packets.
+
+                bool receivedPacketsHasMore = receivedPacketQueue.Count > 0;
+                bool sendingPacketsHasMore = gamePacketSendQueue.Count > 0;
+
+                // Receive packets and send packets interlaced until there are no more to send/receive.
+                while (receivedPacketsHasMore || sendingPacketsHasMore)
+                {
+                    if (receivedPacketsHasMore)
+                    {
+                        GamePacket nextReceived = parseIncomingPacket(receivedPacketQueue.Dequeue());
+                        receivedPackets.Add(nextReceived);
+                    }
+
+                    if (sendingPacketsHasMore)
+                    {
+                        GamePacket nextToSend = gamePacketSendQueue.Dequeue();
+                        sendPacket(client, nextToSend);
+                    } else
+                    {
+                        // Send a ping packet if there are more received packets than sent packets so that acknowledgements are made.
+                        if (receivedPacketsHasMore)
+                        {
+                            sendPacket(client, new PingPacket());
+                        }
+                    }
+
+                    receivedPacketsHasMore = receivedPacketQueue.Count > 0;
+                    sendingPacketsHasMore = gamePacketSendQueue.Count > 0;
+                }
+            }
+
+            return receivedPackets;
+        }
+
+        protected void sendPacket(UdpClient client, GamePacket gp)
+        {
+            IPEndPoint ep = null;
+            if (onlinePlayerEntity != null)
+            {
+                ep = onlinePlayerEntity.ip;
+            }
             NetworkDataWriter ndw = new NetworkDataWriter();
             writeNextPacketHeader(ndw);
             gp.write(ndw);
             byte[] bytes = ndw.getByteArray();
             try
             {
-                client.BeginSend(bytes, bytes.Length, e, new AsyncCallback(sentPacket), null);
+                client.BeginSend(bytes, bytes.Length, ep, new AsyncCallback(sentPacket), null);
                 timeLastPacketSent = GameServer.getServerStopwatchMillis();
                 packets_sent++;
             }
@@ -219,7 +282,8 @@ namespace VrMMOServer
             ndw.writeUInt16(getPacketTypeCode());
             writePacketInfo(ndw);
         }
-
+        
+        public Boolean reliable = false;
         abstract protected void writePacketInfo(NetworkDataWriter ndw);
         abstract protected UInt16 getPacketTypeCode();
     }
@@ -269,6 +333,7 @@ namespace VrMMOServer
         {
             EntityRemovePacket erp = new EntityRemovePacket();
             erp.id = ge.id;
+            erp.reliable = true;
             return erp;
         }
     }
@@ -439,6 +504,18 @@ namespace VrMMOServer
         {
             if (System.BitConverter.IsLittleEndian)
                 System.Array.Reverse(original, offset, length);
+        }
+    }
+
+    class ReceivedDataPacket
+    {
+        public IPEndPoint endpoint;
+        public Byte[] data;
+
+        public ReceivedDataPacket(Byte[] d, IPEndPoint e)
+        {
+            endpoint = e;
+            data = d;
         }
     }
 }

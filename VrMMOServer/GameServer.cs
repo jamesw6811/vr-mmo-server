@@ -34,7 +34,6 @@ namespace VrMMOServer
         public const Int64 MILLIS_PER_STATUS_UPDATE = 1000 * 5;
         private static long MILLIS_STOPWATCH_FREQUENCY_DIVIDER = Stopwatch.Frequency / 1000;
         private Dictionary<IPEndPoint, GamePacketCoordinator> coordinators;
-        private Queue<ReceivedPacket> receivedPackets;
         private UdpClient udpServer;
         private const int port = 33333;
         private GameWorld world;
@@ -43,7 +42,6 @@ namespace VrMMOServer
         public GameServer()
         {
             coordinators = new Dictionary<IPEndPoint, GamePacketCoordinator>();
-            receivedPackets = new Queue<ReceivedPacket>();
         }
 
         public static long getServerStopwatchMillis()
@@ -111,10 +109,7 @@ namespace VrMMOServer
                 IPEndPoint ep = new IPEndPoint(IPAddress.Any, port);
                 Byte[] receiveBytes = udpServer.EndReceive(ar, ref ep);
                 udpServer.BeginReceive(new AsyncCallback(recv), null);
-                lock (receivedPackets)
-                {
-                    receivedPackets.Enqueue(new ReceivedPacket(receiveBytes, ep));
-                }
+                handleReceivedPacketData(receiveBytes, ep);
             }
             catch (SocketException e)
             {
@@ -137,11 +132,7 @@ namespace VrMMOServer
             {
                 if (!coordinators.TryGetValue(e, out gpc))
                 {
-                    OnlinePlayerEntity ope = new OnlinePlayerEntity();
-                    ope.ip = e;
-                    world.addEntity(ope);
                     gpc = new GamePacketCoordinator();
-                    gpc.onlinePlayerEntity = ope;
                     coordinators.Add(e, gpc);
                     lock (Program.consoleLock)
                     {
@@ -150,10 +141,8 @@ namespace VrMMOServer
                 }
             }
 
-            // Receive and parse Game Packet
-            GamePacket gp = gpc.parseIncomingPacket(receiveBytes);
-
-            handleGamePacket(gp, gpc.onlinePlayerEntity);
+            // Queue packet for later parsing
+            gpc.queueIncomingPacketData(new ReceivedDataPacket(receiveBytes, e));
             
         }
 
@@ -246,14 +235,36 @@ namespace VrMMOServer
         /// Handle all queued received packet data
         /// </summary>
         private void handleReceivedPacketQueue()
-        {
-            lock (receivedPackets) { 
-                while (receivedPackets.Any())
+        {            
+            lock (coordinators)
+            {
+                foreach (KeyValuePair<IPEndPoint, GamePacketCoordinator> kvp in coordinators)
                 {
-                    ReceivedPacket rp = receivedPackets.Dequeue();
-                    handleReceivedPacketData(rp.data, rp.endpoint);
+                    IPEndPoint ep = kvp.Key;
+                    GamePacketCoordinator gpc = kvp.Value;
+
+                    // Handle unattached coordinator by creating new online player
+                    if (gpc.onlinePlayerEntity == null)
+                    {
+                        createNewOnlinePlayerEntity(ep, gpc);
+                    }
+
+                    // Handle all received game packets
+                    List<GamePacket> gp_list = gpc.sendAndReceiveQueuedPackets(udpServer);
+                    foreach (GamePacket gp in gp_list)
+                    {
+                        handleGamePacket(gp, gpc.onlinePlayerEntity);
+                    }
                 }
             }
+        }
+
+        private void createNewOnlinePlayerEntity(IPEndPoint ep, GamePacketCoordinator gpc)
+        {
+            OnlinePlayerEntity opc = new OnlinePlayerEntity();
+            opc.ip = ep;
+            world.addEntity(opc);
+            gpc.onlinePlayerEntity = opc;
         }
 
         /// <summary>
@@ -264,13 +275,13 @@ namespace VrMMOServer
             if (gpc.timeLastPacketSent < pingThreshold)
             {
                 PingPacket pp = new PingPacket();
-                gpc.sendPacketToClient(udpServer, pp);
+                gpc.addPacketToSendQueue(pp);
             }
         }
 
 
         /// <summary>
-        /// Update view of the world for all connected players.
+        /// Update view of the world for all connected players that have world entities.
         /// </summary>
         private void updateWorldViews()
         {
@@ -282,7 +293,10 @@ namespace VrMMOServer
                     EntityRemovePacket erp = EntityRemovePacket.fromEntity(ge);
                     foreach (GamePacketCoordinator gpc in coordinators.Values)
                     {
-                        gpc.sendPacketToClient(udpServer, erp);
+                        if (gpc.onlinePlayerEntity != null)
+                        {
+                            gpc.addPacketToSendQueue(erp);
+                        }
                     }
                 }
             }
@@ -296,9 +310,9 @@ namespace VrMMOServer
                     foreach (GamePacketCoordinator gpc in coordinators.Values)
                     {
                         // If the game entity isn't bound to this connection, send an update.
-                        if (!gpc.boundToEntity(ge))
+                        if (gpc.onlinePlayerEntity != null && !gpc.boundToEntity(ge))
                         {
-                            gpc.sendPacketToClient(udpServer, eup);
+                            gpc.addPacketToSendQueue(eup);
                         }
                     }
                 }
@@ -350,16 +364,5 @@ namespace VrMMOServer
 
 
 
-    class ReceivedPacket
-    {
-        public IPEndPoint endpoint;
-        public Byte[] data;
-
-        public ReceivedPacket(Byte[] d, IPEndPoint e)
-        {
-            endpoint = e;
-            data = d;
-        }
-    }
 
 }
