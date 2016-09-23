@@ -34,9 +34,14 @@ namespace ConsoleApplication1
 
         }
 
+        public float gamedeg2rad(float deg)
+        {
+            return (float)((Math.PI / 2.0 - deg * 2.0 * Math.PI / 360.0) % (2.0 * Math.PI));
+        }
+
         public void runScaleTest()
         {
-            int numberFakeClients = 5;
+            int numberFakeClients = 20;
             Console.WriteLine("Starting server");
             startServer();
 
@@ -44,10 +49,10 @@ namespace ConsoleApplication1
             {
                 for (int x = 0; x < numberFakeClients; x++)
                 {
-                    fakeRandomMovingClient(50000, 50);
+                    fakeRandomMovingClient(15000, 20);
                 }
 
-                Thread.Sleep(50000);
+                Thread.Sleep(20000);
                 shutdownServer();
                 startServer();
             }
@@ -104,8 +109,8 @@ namespace ConsoleApplication1
             UInt32 clientPacketsPerSecond = 30;
             UInt32 waitBetweenPackets = 1000 / clientPacketsPerSecond;
             UInt32 iterationsTotal = time / waitBetweenPackets;
-            float YdistancePerIteration = (float)Math.Sin(direction) * distance / iterationsTotal;
-            float XdistancePerIteration = (float)Math.Cos(direction) * distance / iterationsTotal;
+            float YdistancePerIteration = (float)Math.Sin(gamedeg2rad(direction)) * distance / iterationsTotal;
+            float XdistancePerIteration = (float)Math.Cos(gamedeg2rad(direction)) * distance / iterationsTotal;
             GameNetworkingClient gnc;
             gnc = getGNP();
             gnc.startClient();
@@ -136,7 +141,7 @@ namespace ConsoleApplication1
         public void fakeRandomMovingClient(UInt32 time, float distance)
         {
             Random r = new Random();
-            fakeMovingClient(time, distance, (float)(r.NextDouble() * Math.PI * 2));
+            fakeMovingClient(time, distance, (float)(r.NextDouble() * 360));
         }
     }
 }
