@@ -14,6 +14,7 @@ namespace VrMMOServer
         private const UInt32 default_protocol = 0xDEADBEEF;
         private const UInt16 max_sequence = 65535;
         private const UInt16 max_bitfield = 32;
+        private const int num_received_packets_per_ping = 5;
         private static Int64 packets_sent = 0;
         private static Int64 time_start = GameServer.getServerStopwatchMillis();
         private Queue<GamePacket> gamePacketSendQueue;
@@ -131,6 +132,7 @@ namespace VrMMOServer
 
                 bool receivedPacketsHasMore = receivedPacketQueue.Count > 0;
                 bool sendingPacketsHasMore = gamePacketSendQueue.Count > 0;
+                int receivedPacketsWithoutResponse = 0;
 
                 // Receive packets and send packets interlaced until there are no more to send/receive.
                 while (receivedPacketsHasMore || sendingPacketsHasMore)
@@ -145,11 +147,14 @@ namespace VrMMOServer
                     {
                         GamePacket nextToSend = gamePacketSendQueue.Dequeue();
                         sendPacket(client, nextToSend);
-                    } else
+                    }
+                    else
                     {
                         // Send a ping packet if there are more received packets than sent packets so that acknowledgements are made.
-                        if (receivedPacketsHasMore)
+                        receivedPacketsWithoutResponse++;
+                        if (receivedPacketsWithoutResponse >= num_received_packets_per_ping)
                         {
+                            receivedPacketsWithoutResponse = 0;
                             sendPacket(client, new PingPacket());
                         }
                     }
