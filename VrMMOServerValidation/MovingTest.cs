@@ -5,30 +5,23 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using VrMMOServer;
+using NUnit.Framework;
 
-namespace ConsoleApplication1
+namespace VrMMOServerValidation
 {
-    class Program : GamePacketListener
+    [TestFixture()]
+    class MovingTest : GamePacketListener
     {
-        static void Main(string[] args)
-        {
-            new Program().run();
-            //new Program().runScaleTest();
-        }
-
         public Stopwatch sw = Stopwatch.StartNew();
-        public void run()
+
+        [TestCase()]
+        public void outwardMovingTest()
         {
             Console.WriteLine("Starting server");
             startServer();
             fakeListeningClient();
-
-            while (true)
-            {
-                fakeForwardMovingClient(10000, 1);
-                Thread.Sleep(100000);
-            }
-
+            fakeForwardMovingClient(1000, 10);
+            Thread.Sleep(5000);
             shutdownServer();
             startServer();
         }

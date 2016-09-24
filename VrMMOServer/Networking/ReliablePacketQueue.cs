@@ -5,11 +5,11 @@ using System.Text;
 
 namespace VrMMOServer
 {
-    class ReliablePacketQueue
+    public class ReliablePacketQueue
     {
         private Dictionary<UInt16, ReliableGamePacket> sequenceToPacket;
         private Queue<ReliableGamePacket> resendQueue;
-        private const long TIME_OUT_RTT_RESEND = 2000;
+        public const long TIME_OUT_RTT_RESEND = 2000;
 
         public ReliablePacketQueue()
         {

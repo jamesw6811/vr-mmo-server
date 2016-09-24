@@ -11,10 +11,10 @@ using System.Diagnostics;
 
 namespace VrMMOServer
 {
-    class Program
+    public class GameServerProgram
     {
         public static Object consoleLock = new Object();
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             Console.WriteLine("Starting game server...");
             GameServer server = new GameServer();
@@ -25,6 +25,7 @@ namespace VrMMOServer
                 Thread.Sleep(1000);
             }
         }
+
     }
 
     public class GameServer
@@ -113,7 +114,7 @@ namespace VrMMOServer
             }
             catch (SocketException e)
             {
-                lock (Program.consoleLock)
+                lock (GameServerProgram.consoleLock)
                 {
                     Console.WriteLine(e.ToString());
                 }
@@ -134,7 +135,7 @@ namespace VrMMOServer
                 {
                     gpc = new GamePacketCoordinator();
                     coordinators.Add(e, gpc);
-                    lock (Program.consoleLock)
+                    lock (GameServerProgram.consoleLock)
                     {
                         Console.WriteLine("Added player:" + e.ToString());
                     }
