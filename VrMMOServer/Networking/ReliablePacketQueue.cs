@@ -30,7 +30,6 @@ namespace VrMMOServer
             sequenceToPacket.TryGetValue(sequence, out rgp);
             if (rgp != null)
             {
-                Console.WriteLine("Acknowledged sent packet: " + rgp.gp.ToString());
                 rgp.acknowledged = true;
                 sequenceToPacket.Remove(sequence);
             }
@@ -47,7 +46,6 @@ namespace VrMMOServer
                     resendQueue.Dequeue();
                     if (!rgp.acknowledged)
                     {
-                        Console.WriteLine("Resending unacknowledged packet: " + rgp.gp.ToString());
                         resendList.Add(rgp.gp);
                     }
                 } 

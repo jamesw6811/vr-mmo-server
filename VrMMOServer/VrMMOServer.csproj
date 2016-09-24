@@ -56,12 +56,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="GamePacket.cs" />
-    <Compile Include="ReliablePacketQueue.cs" />
-    <Compile Include="GameEntity.cs" />
+    <Compile Include="Networking\GamePacket.cs" />
+    <Compile Include="Networking\ReliablePacketQueue.cs" />
+    <Compile Include="World\GameEntity.cs" />
     <Compile Include="GameNetworkingClient.cs" />
-    <Compile Include="GamePacketCoordinator.cs" />
-    <Compile Include="GameWorld.cs" />
+    <Compile Include="Networking\GamePacketCoordinator.cs" />
+    <Compile Include="World\GameWorld.cs" />
     <Compile Include="GameServer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
