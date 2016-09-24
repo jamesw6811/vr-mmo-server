@@ -19,10 +19,11 @@ namespace VrMMOServer
         private static Int64 time_start = GameServer.getServerStopwatchMillis();
         private Queue<GamePacket> gamePacketSendQueue;
         private Queue<ReceivedDataPacket> receivedPacketQueue;
+        private ReliablePacketQueue reliablePacketQueue;
 
         private UInt16 next_sequence_to_send = 0;
         private UInt32 our_ack_bitfield;
-        private UInt16 ack_sequence_id;
+        private UInt16 our_ack_sequence_id;
 
         private UInt16 their_ack_sequence_id; // Sequence ID of last packet ack'ed by other party
         private UInt32 their_ack_bitfield; // Bitfield of ack'ed packets by other party
@@ -39,13 +40,14 @@ namespace VrMMOServer
         {
             next_sequence_to_send = 0;
             our_ack_bitfield = 0;
-            ack_sequence_id = 0;
+            our_ack_sequence_id = 0;
             their_ack_sequence_id = 0;
             their_ack_bitfield = 0;
             readyForDisconnect = false;
             timeLastPacketReceived = Int64.MaxValue;
             gamePacketSendQueue = new Queue<GamePacket>();
             receivedPacketQueue = new Queue<ReceivedDataPacket>();
+            reliablePacketQueue = new ReliablePacketQueue();
         }
 
         public bool boundToEntity(GameEntity ge)
@@ -128,7 +130,7 @@ namespace VrMMOServer
             List<GamePacket> receivedPackets = new List<GamePacket>();
             lock (this)
             {
-                // TODO: handle re-sending of unacknowledged packets.
+                queueReliableResends();
 
                 bool receivedPacketsHasMore = receivedPacketQueue.Count > 0;
                 bool sendingPacketsHasMore = gamePacketSendQueue.Count > 0;
@@ -167,6 +169,18 @@ namespace VrMMOServer
             return receivedPackets;
         }
 
+        private void queueReliableResends()
+        {
+            lock (this)
+            {
+                List<GamePacket> resends = reliablePacketQueue.getResendPacketList(GameServer.getServerStopwatchMillis());
+                foreach (GamePacket gp in resends)
+                {
+                    gamePacketSendQueue.Enqueue(gp);
+                }
+            }
+        }
+
         protected void sendPacket(UdpClient client, GamePacket gp)
         {
             IPEndPoint ep = null;
@@ -174,10 +188,17 @@ namespace VrMMOServer
             {
                 ep = onlinePlayerEntity.ip;
             }
+            if (gp.reliable)
+            {
+                reliablePacketQueue.addPacket(gp, next_sequence_to_send, GameServer.getServerStopwatchMillis());
+            }
+
             NetworkDataWriter ndw = new NetworkDataWriter();
             writeNextPacketHeader(ndw);
+            next_sequence_to_send++;
             gp.write(ndw);
             byte[] bytes = ndw.getByteArray();
+
             try
             {
                 client.BeginSend(bytes, bytes.Length, ep, new AsyncCallback(sentPacket), null);
@@ -213,15 +234,14 @@ namespace VrMMOServer
         {
             ndw.writeUInt32(default_protocol);
             ndw.writeUInt16(next_sequence_to_send);
-            next_sequence_to_send++;
-            ndw.writeUInt16(ack_sequence_id);
+            ndw.writeUInt16(our_ack_sequence_id);
             ndw.writeUInt32(our_ack_bitfield);
         }
 
         public string getAckStatusString()
         {
             string status = "";
-            status += "Receiving: " + ack_sequence_id.ToString() + " " + Convert.ToString(our_ack_bitfield, 2) + "\r\n";
+            status += "Receiving: " + our_ack_sequence_id.ToString() + " " + Convert.ToString(our_ack_bitfield, 2) + "\r\n";
             status += "Sending: " + their_ack_sequence_id.ToString() + " " + Convert.ToString(their_ack_bitfield, 2) + "\r\n";
             return status;
         }
@@ -229,18 +249,18 @@ namespace VrMMOServer
         /**
             Flag the packet received from the other party as received for future acknowledgement
         */
-        private void flagReceivedPacketAck(UInt16 sequence_id)
+        private void flagReceivedPacketAck(UInt16 new_sequence_id)
         {
-            if (isMoreRecentSequence(sequence_id, ack_sequence_id))
+            if (isMoreRecentSequence(new_sequence_id, our_ack_sequence_id))
             {
-                int sequence_separation = getSequenceSeparation(sequence_id, ack_sequence_id);
+                int sequence_separation = getSequenceSeparation(new_sequence_id, our_ack_sequence_id);
                 our_ack_bitfield = our_ack_bitfield << sequence_separation;
+                our_ack_sequence_id = new_sequence_id;
                 our_ack_bitfield = our_ack_bitfield | ((UInt32)1 << sequence_separation - 1);
-                ack_sequence_id = sequence_id;
             }
             else
             {
-                int sequence_separation = getSequenceSeparation(ack_sequence_id, sequence_id);
+                int sequence_separation = getSequenceSeparation(our_ack_sequence_id, new_sequence_id);
                 if (sequence_separation <= max_bitfield && sequence_separation > 0)
                 {
                     our_ack_bitfield = our_ack_bitfield | ((UInt32)1 << sequence_separation - 1);
@@ -251,12 +271,31 @@ namespace VrMMOServer
         /**
             Update the received packet acknowledgement bitfield and id for the other party
         */
-        private void updateSentPacketAck(UInt16 ack_sequence_id, UInt32 ack_bitfield)
+        private void updateSentPacketAck(UInt16 new_ack_sequence_id, UInt32 new_ack_bitfield)
         {
-            if (isMoreRecentSequence(ack_sequence_id, their_ack_sequence_id))
+            // Make sure to only use latest ack field, not out of date
+            if (isMoreRecentSequence(new_ack_sequence_id, their_ack_sequence_id))
             {
-                their_ack_bitfield = ack_bitfield;
-                their_ack_sequence_id = ack_sequence_id;
+                // Diff ack fields to determine newly received packets
+                int sequence_separation = getSequenceSeparation(new_ack_sequence_id, their_ack_sequence_id);
+                UInt32 diff_bitfield = their_ack_bitfield;
+                diff_bitfield = (diff_bitfield << 1) | 1; // Add last sequence id
+                diff_bitfield = diff_bitfield << (sequence_separation - 1); // Correct frame
+                diff_bitfield = diff_bitfield ^ new_ack_bitfield; // Filter only newly flipped bits
+                reliablePacketQueue.acknowledgePacket(new_ack_sequence_id); // Notify current acknowledgement
+                for (int x = new_ack_sequence_id - 1; x > new_ack_sequence_id - max_bitfield - 1; x--) // Notify other new packets
+                {
+                    if ((diff_bitfield & 1) > 0)
+                    {
+                        UInt16 sequence_number = (UInt16)(x % (max_sequence + 1));
+                        reliablePacketQueue.acknowledgePacket(sequence_number);
+                    }
+                    diff_bitfield = diff_bitfield >> 1;
+                }
+
+                // Update ack fields
+                their_ack_bitfield = new_ack_bitfield;
+                their_ack_sequence_id = new_ack_sequence_id;
             }
         }
 
@@ -280,139 +319,6 @@ namespace VrMMOServer
         }
     }
 
-    public abstract class GamePacket
-    {
-        public void write(NetworkDataWriter ndw)
-        {
-            ndw.writeUInt16(getPacketTypeCode());
-            writePacketInfo(ndw);
-        }
-        
-        public Boolean reliable = false;
-        abstract protected void writePacketInfo(NetworkDataWriter ndw);
-        abstract protected UInt16 getPacketTypeCode();
-    }
-
-    public class PingPacket : GamePacket
-    {
-        public const UInt16 packet_type = 0x0000;
-
-        public static PingPacket fromData(NetworkDataReader ndr)
-        {
-            return new PingPacket();
-        }
-
-        protected override UInt16 getPacketTypeCode()
-        {
-            return packet_type;
-        }
-
-        protected override void writePacketInfo(NetworkDataWriter ndw)
-        {
-            return;
-        }
-    }
-
-    public class EntityRemovePacket : GamePacket
-    {
-        public const UInt16 packet_type = 0x0002;
-        public UInt32 id;
-        public static EntityRemovePacket fromData(NetworkDataReader ndr)
-        {
-            EntityRemovePacket erp = new EntityRemovePacket();
-            erp.id = ndr.getUInt32();
-            return erp;
-        }
-
-        protected override ushort getPacketTypeCode()
-        {
-            return packet_type;
-        }
-
-        protected override void writePacketInfo(NetworkDataWriter ndw)
-        {
-            ndw.writeUInt32(id);
-        }
-
-        internal static EntityRemovePacket fromEntity(GameEntity ge)
-        {
-            EntityRemovePacket erp = new EntityRemovePacket();
-            erp.id = ge.id;
-            erp.reliable = true;
-            return erp;
-        }
-    }
-
-    public class EntityUpdatePacket : GamePacket
-    {
-        public Single x;
-        public Single y;
-        public Single upDown;
-        public Single leftRight;
-        public Single tilt;
-        public UInt32 id;
-        public UInt32 graphic;
-        public const UInt16 packet_type = 0x0001;
-        public static EntityUpdatePacket fromData(NetworkDataReader ndr)
-        {
-            EntityUpdatePacket eup = new EntityUpdatePacket();
-            eup.x = ndr.getSingle();
-            eup.y = ndr.getSingle();
-            eup.upDown = ndr.getSingle();
-            eup.leftRight = ndr.getSingle();
-            eup.tilt = ndr.getSingle();
-            eup.id = ndr.getUInt32();
-            eup.graphic = ndr.getUInt32();
-            return eup;
-        }
-
-        protected override UInt16 getPacketTypeCode()
-        {
-            return packet_type;
-        }
-
-        protected override void writePacketInfo(NetworkDataWriter ndw)
-        {
-            ndw.writeSingle(x);
-            ndw.writeSingle(y);
-            ndw.writeSingle(upDown);
-            ndw.writeSingle(leftRight);
-            ndw.writeSingle(tilt);
-            ndw.writeUInt32(id);
-            ndw.writeUInt32(graphic);
-        }
-
-        public override string ToString()
-        {
-            return "EntityUpdatePacket:\r\n"
-                + " (" + x.ToString() + "," + y.ToString() + ")\r\n"
-                + " (" + upDown.ToString() + "," + leftRight.ToString() + "," + tilt.ToString() + ")\r\n"
-                + " (" + id.ToString() + "," + graphic.ToString() + ")";
-        }
-
-        public void update(GameEntity ge)
-        {
-            ge.x = x;
-            ge.y = y;
-            ge.upDown = upDown;
-            ge.leftRight = leftRight;
-            ge.tilt = tilt;
-            ge.graphic = graphic;
-        }
-
-        internal static EntityUpdatePacket fromEntity(GameEntity ge)
-        {
-            EntityUpdatePacket eup = new EntityUpdatePacket();
-            eup.x = ge.x;
-            eup.y = ge.y;
-            eup.graphic = ge.graphic;
-            eup.id = ge.id;
-            eup.leftRight = ge.leftRight;
-            eup.upDown = ge.upDown;
-            eup.tilt = ge.tilt;
-            return eup;
-        }
-    }
 
     public class NetworkDataWriter
     {

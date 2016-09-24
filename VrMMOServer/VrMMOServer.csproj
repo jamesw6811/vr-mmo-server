@@ -56,6 +56,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="GamePacket.cs" />
+    <Compile Include="ReliablePacketQueue.cs" />
     <Compile Include="GameEntity.cs" />
     <Compile Include="GameNetworkingClient.cs" />
     <Compile Include="GamePacketCoordinator.cs" />

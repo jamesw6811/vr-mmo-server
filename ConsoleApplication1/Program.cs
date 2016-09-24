@@ -12,8 +12,8 @@ namespace ConsoleApplication1
     {
         static void Main(string[] args)
         {
-            //new Program().run();
-            new Program().runScaleTest();
+            new Program().run();
+            //new Program().runScaleTest();
         }
 
         public Stopwatch sw = Stopwatch.StartNew();
@@ -25,13 +25,12 @@ namespace ConsoleApplication1
 
             while (true)
             {
-                fakeForwardMovingClient(10000, 5);
-
-                Thread.Sleep(20000);
-                shutdownServer();
-                startServer();
+                fakeForwardMovingClient(10000, 1);
+                Thread.Sleep(100000);
             }
 
+            shutdownServer();
+            startServer();
         }
 
         public float gamedeg2rad(float deg)
