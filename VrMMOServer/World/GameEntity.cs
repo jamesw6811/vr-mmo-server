@@ -57,7 +57,7 @@ namespace VrMMOServer
 
     public class OnlinePetEntity : GameEntity, AIBehavior
     {
-        public const float MOVEMENT_SPEED = 0.04f;
+        public const float MOVEMENT_SPEED = 0.02f;
         public const float DISTANCE_STOP_SQUARED = 4f;
         public UInt32 owner_id;
         public OnlinePetEntity(UInt32 owner)
