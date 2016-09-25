@@ -207,6 +207,7 @@ namespace VrMMOServer
             Console.WriteLine("Packets/seconds: " + GamePacketCoordinator.packetsPerSecond().ToString());
             Console.WriteLine("Packets total: " + GamePacketCoordinator.packetsTotal().ToString());
             Console.WriteLine("Time now: " + GameServer.getServerStopwatchMillis().ToString());
+            Console.WriteLine("GameWorld tick: " + gameWorldTickDuration.ToString());
             Console.WriteLine("Packet Receiving: " + packetReceivingDuration.ToString());
             Console.WriteLine("Worldview Sending: " + worldViewSendingDuration.ToString());
             Console.WriteLine("Connection Updating: " + updateConnectionsDuration.ToString());
@@ -216,8 +217,13 @@ namespace VrMMOServer
         private Int64 packetReceivingDuration = 0;
         private Int64 worldViewSendingDuration = 0;
         private Int64 updateConnectionsDuration = 0;
+        private Int64 gameWorldTickDuration = 0;
         private void runUpdateLoop()
         {
+            gameWorldTickDuration = getServerStopwatchMillis();
+            world.doGameWorldTick();
+            gameWorldTickDuration = getServerStopwatchMillis() - gameWorldTickDuration;
+
             packetReceivingDuration = getServerStopwatchMillis();
             handleReceivedPacketQueue();
             packetReceivingDuration = getServerStopwatchMillis() - packetReceivingDuration;
@@ -357,7 +363,7 @@ namespace VrMMOServer
             {
                 lock (world)
                 {
-                    world.removeEntity(gpc.onlinePlayerEntity);
+                    world.serverRemoveEntity(gpc.onlinePlayerEntity.id);
                 }
             }
         }
