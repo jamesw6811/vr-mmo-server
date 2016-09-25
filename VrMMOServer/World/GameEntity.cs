@@ -58,7 +58,9 @@ namespace VrMMOServer
     public class OnlinePetEntity : GameEntity, AIBehavior
     {
         public const float MOVEMENT_SPEED = 0.02f;
-        public const float DISTANCE_STOP_SQUARED = 4f;
+        public const float DISTANCE_AWAY_TO_WALK = 2f;
+        public const float DISTANCE_STOP_SQUARED = 1f;
+        public const float ANGLE_OFF_FORWARD = (float)Math.PI / 8;
         public UInt32 owner_id;
         public OnlinePetEntity(UInt32 owner)
         {
@@ -69,12 +71,16 @@ namespace VrMMOServer
         public void doBehavior(GameWorld gw)
         {
             GameEntity owner = gw.getEntity(owner_id);
-            float dirToOwner = GameWorld.getDirection(this.x, this.y, owner.x, owner.y);
-            float distanceToOwner = GameWorld.getDistanceSquared(this.x, this.y, owner.x, owner.y);
-            if (distanceToOwner > DISTANCE_STOP_SQUARED)
+            float ownerDirection = owner.leftRight;
+            float rightOfOwnerDirection = (GameWorld.UnityDegreesToRads(owner.leftRight) - ANGLE_OFF_FORWARD) % (float)(2 * Math.PI);
+            float targetX = owner.x + (float)Math.Cos(rightOfOwnerDirection) * DISTANCE_AWAY_TO_WALK;
+            float targetY = owner.y + (float)Math.Sin(rightOfOwnerDirection) * DISTANCE_AWAY_TO_WALK;
+            float dirToTarget = GameWorld.getDirection(this.x, this.y, targetX, targetY);
+            float distanceToTarget = GameWorld.getDistanceSquared(this.x, this.y, targetX, targetY);
+            if (distanceToTarget > DISTANCE_STOP_SQUARED)
             {
-                float newX = this.x + (float)Math.Cos(dirToOwner) * MOVEMENT_SPEED;
-                float newY = this.y + (float)Math.Sin(dirToOwner) * MOVEMENT_SPEED;
+                float newX = this.x + (float)Math.Cos(dirToTarget) * MOVEMENT_SPEED;
+                float newY = this.y + (float)Math.Sin(dirToTarget) * MOVEMENT_SPEED;
                 gw.moveEntity(this.id, newX, newY);
             }
         }

@@ -28,6 +28,16 @@ namespace VrMMOServer
             return x * x + y * y;
         }
 
+        public static float UnityDegreesToRads(float deg)
+        {
+            return (float)((Math.PI / 2.0 - deg * 2.0 * Math.PI / 360.0) % (2.0 * Math.PI));
+        }
+
+        public static float RadsToUnityDegrees(float rads)
+        {
+            return (float)(90 - rads * 360 / (2.0 * Math.PI) % 360);
+        }
+
         public GameWorld()
         {
             nextID = 0;
